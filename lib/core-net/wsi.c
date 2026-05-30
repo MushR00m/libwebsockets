@@ -607,16 +607,20 @@ int lws_has_buffered_out(struct lws *wsi) {
 			for (i = 0; i < LWS_QUIC_LEVEL_COUNT; i++) {
 				lws_start_foreach_dll_safe(struct lws_dll2 *, d, d1, qn->pending_tx[i].head) {
 					struct lws_quic_tx_frame *f = lws_container_of(d, struct lws_quic_tx_frame, list);
-					if ((f->type & 0xf8) == LWS_QUIC_FT_STREAM && f->stream_id == sid) {
-						lwsl_notice("lws_has_buffered_out: %s has pending_tx stream frame on sid %llu\n", lws_wsi_tag(wsi), (unsigned long long)sid);
+					if (((f->type & 0xf8) == LWS_QUIC_FT_STREAM && f->stream_id == sid) ||
+					    (f->type == LWS_QUIC_FT_STREAM_DATA_BLOCKED && f->stream_id == sid) ||
+					    f->type == LWS_QUIC_FT_DATA_BLOCKED) {
+						lwsl_notice("lws_has_buffered_out: %s has pending_tx stream/blocked frame on sid %llu\n", lws_wsi_tag(wsi), (unsigned long long)sid);
 						return 1;
 					}
 				} lws_end_foreach_dll_safe(d, d1);
 
 				lws_start_foreach_dll_safe(struct lws_dll2 *, d, d1, qn->in_flight[i].head) {
 					struct lws_quic_tx_frame *f = lws_container_of(d, struct lws_quic_tx_frame, list);
-					if ((f->type & 0xf8) == LWS_QUIC_FT_STREAM && f->stream_id == sid) {
-						lwsl_notice("lws_has_buffered_out: %s has in_flight stream frame on sid %llu\n", lws_wsi_tag(wsi), (unsigned long long)sid);
+					if (((f->type & 0xf8) == LWS_QUIC_FT_STREAM && f->stream_id == sid) ||
+					    (f->type == LWS_QUIC_FT_STREAM_DATA_BLOCKED && f->stream_id == sid) ||
+					    f->type == LWS_QUIC_FT_DATA_BLOCKED) {
+						lwsl_notice("lws_has_buffered_out: %s has in_flight stream/blocked frame on sid %llu\n", lws_wsi_tag(wsi), (unsigned long long)sid);
 						return 1;
 					}
 				} lws_end_foreach_dll_safe(d, d1);
