@@ -1,4 +1,4 @@
-name: Static Build and Release
+name: Static Build and Release v2
 
 on:
   workflow_dispatch:
