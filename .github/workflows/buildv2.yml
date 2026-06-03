@@ -1,6 +1,9 @@
 name: Static Build and Release v2
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       create_release:
@@ -56,7 +59,7 @@ jobs:
           mkdir -p dist/include dist/lib
           # Copy public headers
           cp ../include/libwebsockets.h dist/include/
-          cp ../include/libwebsockets dist/include/ -r
+          cp -r ../include/libwebsockets dist/include/
           # Copy generated config headers
           cp lws_config.h dist/include/
           cp ../include/lws_config_private.h dist/include/ 2>/dev/null || true
@@ -104,8 +107,9 @@ jobs:
           if [ -f "${{ env.BUILD_DIR }}/output/libwebsockets.a" ]; then
             mkdir -p dist/include dist/lib
             cp include/libwebsockets.h dist/include/
-            cp include/libwebsockets dist/include/ -r
+            cp -r include/libwebsockets dist/include/
             cp "${{ env.BUILD_DIR }}/output/lws_config.h" dist/include/ 2>/dev/null || true
+            cp "${{ env.BUILD_DIR }}/output/lws_config_private.h" dist/include/ 2>/dev/null || true
             cp "${{ env.BUILD_DIR }}/output/libwebsockets.a" dist/lib/
             cd dist
             tar -czf ../libwebsockets-static-linux-arm64.tar.gz .
@@ -160,7 +164,7 @@ jobs:
           mkdir -p dist/include dist/lib
           # Copy public headers
           cp ../include/libwebsockets.h dist/include/
-          cp ../include/libwebsockets dist/include/ -r
+          cp -r ../include/libwebsockets dist/include/
           # Copy generated config headers
           cp lws_config.h dist/include/
           cp ../include/lws_config_private.h dist/include/ 2>/dev/null || true
@@ -218,7 +222,7 @@ jobs:
           mkdir -p dist/include dist/lib
           # Copy public headers
           cp ../include/libwebsockets.h dist/include/
-          cp ../include/libwebsockets dist/include/ -r
+          cp -r ../include/libwebsockets dist/include/
           # Copy generated config headers
           cp lws_config.h dist/include/
           cp ../include/lws_config_private.h dist/include/ 2>/dev/null || true
@@ -279,6 +283,9 @@ jobs:
           Copy-Item "include/libwebsockets" "$BuildDir/dist/include/" -Recurse
           # Copy generated config headers
           Copy-Item "$BuildDir/lws_config.h" "$BuildDir/dist/include/"
+          if (Test-Path "include/lws_config_private.h") {
+            Copy-Item "include/lws_config_private.h" "$BuildDir/dist/include/"
+          }
           # Copy static library
           Copy-Item "$BuildDir/lib/${{ env.CMAKE_BUILD_TYPE }}/websockets_static.lib" "$BuildDir/dist/lib/libwebsockets.lib"
           cd "$BuildDir/dist"
@@ -350,7 +357,8 @@ jobs:
           
           Each archive contains:
           - Public headers in `include/libwebsockets/`
-          - Generated config headers (`lws_config.h`)
+          - Generated config headers (`lws_config.h`, `lws_config_private.h`)
+          - Main header file (`include/libwebsockets.h`)
           - Static library in `lib/libwebsockets.a` (or `.lib` on Windows)
           
           ## Usage
