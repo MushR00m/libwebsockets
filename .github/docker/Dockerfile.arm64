@@ -16,11 +16,8 @@ WORKDIR /build
 # Copy source code
 COPY . /build/
 
-# Create build directory
-RUN mkdir -p build && cd build
-
-# Configure CMake for static build
-RUN cd build && cmake .. \
+# Create build directory and configure
+RUN mkdir -p build && cd build && cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DLWS_WITH_STATIC=ON \
     -DLWS_WITH_SHARED=OFF \
@@ -32,7 +29,13 @@ RUN cd build && cmake .. \
 # Build
 RUN cd build && cmake --build . --config Release --parallel $(nproc)
 
-# Output stage - copy only the built library
+# Output stage - copy all necessary files
 FROM --platform=linux/arm64 ubuntu:22.04
 RUN apt-get update && apt-get install -y libssl3 && rm -rf /var/lib/apt/lists/*
+
+# Copy built library
 COPY --from=builder /build/build/lib/libwebsockets.a /output/libwebsockets.a
+
+# Copy generated config headers
+COPY --from=builder /build/build/lws_config.h /output/lws_config.h
+COPY --from=builder /build/build/lws_config_private.h /output/lws_config_private.h 2>/dev/null || true
