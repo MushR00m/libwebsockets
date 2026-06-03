@@ -1,4 +1,4 @@
-name: Static Build and Release v2
+name: Static Build and Release
 
 on:
   workflow_dispatch:
@@ -54,9 +54,15 @@ jobs:
         run: |
           cd "${{ env.BUILD_DIR }}"
           mkdir -p dist/include dist/lib
+          # Copy public headers
           cp ../include/libwebsockets.h dist/include/
           cp ../include/libwebsockets dist/include/ -r
+          # Copy generated config headers
+          cp lws_config.h dist/include/
+          cp ../include/lws_config_private.h dist/include/ 2>/dev/null || true
+          # Copy static library
           cp lib/libwebsockets.a dist/lib/
+          # Create archive
           cd dist
           tar -czf ../libwebsockets-static-linux-x64.tar.gz .
           cd ..
@@ -99,6 +105,7 @@ jobs:
             mkdir -p dist/include dist/lib
             cp include/libwebsockets.h dist/include/
             cp include/libwebsockets dist/include/ -r
+            cp "${{ env.BUILD_DIR }}/output/lws_config.h" dist/include/ 2>/dev/null || true
             cp "${{ env.BUILD_DIR }}/output/libwebsockets.a" dist/lib/
             cd dist
             tar -czf ../libwebsockets-static-linux-arm64.tar.gz .
@@ -151,9 +158,15 @@ jobs:
         run: |
           cd "${{ env.BUILD_DIR }}"
           mkdir -p dist/include dist/lib
+          # Copy public headers
           cp ../include/libwebsockets.h dist/include/
           cp ../include/libwebsockets dist/include/ -r
+          # Copy generated config headers
+          cp lws_config.h dist/include/
+          cp ../include/lws_config_private.h dist/include/ 2>/dev/null || true
+          # Copy static library
           cp lib/libwebsockets.a dist/lib/
+          # Create archive
           cd dist
           tar -czf ../libwebsockets-static-macos-intel.tar.gz .
           cd ..
@@ -203,9 +216,15 @@ jobs:
         run: |
           cd "${{ env.BUILD_DIR }}"
           mkdir -p dist/include dist/lib
+          # Copy public headers
           cp ../include/libwebsockets.h dist/include/
           cp ../include/libwebsockets dist/include/ -r
+          # Copy generated config headers
+          cp lws_config.h dist/include/
+          cp ../include/lws_config_private.h dist/include/ 2>/dev/null || true
+          # Copy static library
           cp lib/libwebsockets.a dist/lib/
+          # Create archive
           cd dist
           tar -czf ../libwebsockets-static-macos-arm64.tar.gz .
           cd ..
@@ -255,8 +274,12 @@ jobs:
           $BuildDir = "${{ env.BUILD_DIR }}"
           New-Item -ItemType Directory -Force -Path "$BuildDir/dist/include" | Out-Null
           New-Item -ItemType Directory -Force -Path "$BuildDir/dist/lib" | Out-Null
+          # Copy public headers
           Copy-Item "include/libwebsockets.h" "$BuildDir/dist/include/"
           Copy-Item "include/libwebsockets" "$BuildDir/dist/include/" -Recurse
+          # Copy generated config headers
+          Copy-Item "$BuildDir/lws_config.h" "$BuildDir/dist/include/"
+          # Copy static library
           Copy-Item "$BuildDir/lib/${{ env.CMAKE_BUILD_TYPE }}/websockets_static.lib" "$BuildDir/dist/lib/libwebsockets.lib"
           cd "$BuildDir/dist"
           7z a -tzip ../libwebsockets-static-windows-x64.zip *
@@ -326,8 +349,20 @@ jobs:
           ## Contents
           
           Each archive contains:
-          - Headers in `include/`
+          - Public headers in `include/libwebsockets/`
+          - Generated config headers (`lws_config.h`)
           - Static library in `lib/libwebsockets.a` (or `.lib` on Windows)
+          
+          ## Usage
+          
+          Extract the archive and use with your build system:
+          
+          ```cmake
+          # CMakeLists.txt
+          link_directories(/path/to/extracted/lib)
+          include_directories(/path/to/extracted/include)
+          target_link_libraries(your_target libwebsockets)
+          ```
           
           ## Dependencies
           
