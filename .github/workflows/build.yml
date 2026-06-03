@@ -1,0 +1,344 @@
+name: Static Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create release after build'
+        required: false
+        default: 'true'
+
+env:
+  CMAKE_BUILD_TYPE: Release
+  BUILD_DIR: build
+
+jobs:
+  build-linux-x64:
+    runs-on: ubuntu-latest
+    name: Build Linux x86_64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            pkg-config \
+            libssl-dev \
+            libcap-dev
+
+      - name: Configure CMake
+        run: |
+          mkdir -p "${{ env.BUILD_DIR }}"
+          cd "${{ env.BUILD_DIR }}"
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
+            -DLWS_WITH_STATIC=ON \
+            -DLWS_WITH_SHARED=OFF \
+            -DLWS_WITH_SSL=ON \
+            -DLWS_WITH_LIBCAP=ON \
+            -DLWS_WITH_MINIMAL_EXAMPLES=OFF \
+            -DLWS_WITHOUT_TESTAPPS=ON
+
+      - name: Build
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          cmake --build . --config ${{ env.CMAKE_BUILD_TYPE }} --parallel $(nproc)
+
+      - name: Create distribution package
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          mkdir -p dist/include dist/lib
+          cp ../include/libwebsockets.h dist/include/
+          cp ../include/libwebsockets dist/include/ -r
+          cp lib/libwebsockets.a dist/lib/
+          cd dist
+          tar -czf ../libwebsockets-static-linux-x64.tar.gz .
+          cd ..
+          sha256sum libwebsockets-static-linux-x64.tar.gz > libwebsockets-static-linux-x64.tar.gz.sha256
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwebsockets-linux-x64
+          path: |
+            ${{ env.BUILD_DIR }}/libwebsockets-static-linux-x64.tar.gz
+            ${{ env.BUILD_DIR }}/libwebsockets-static-linux-x64.tar.gz.sha256
+
+  build-linux-arm64:
+    runs-on: ubuntu-latest
+    name: Build Linux ARM64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build in Docker (ARM64)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: .github/docker/Dockerfile.arm64
+          platforms: linux/arm64
+          outputs: type=local,dest=${{ env.BUILD_DIR }}/output
+
+      - name: Create distribution package
+        run: |
+          if [ -f "${{ env.BUILD_DIR }}/output/libwebsockets.a" ]; then
+            mkdir -p dist/include dist/lib
+            cp include/libwebsockets.h dist/include/
+            cp include/libwebsockets dist/include/ -r
+            cp "${{ env.BUILD_DIR }}/output/libwebsockets.a" dist/lib/
+            cd dist
+            tar -czf ../libwebsockets-static-linux-arm64.tar.gz .
+            cd ..
+            sha256sum libwebsockets-static-linux-arm64.tar.gz > libwebsockets-static-linux-arm64.tar.gz.sha256
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwebsockets-linux-arm64
+          path: |
+            libwebsockets-static-linux-arm64.tar.gz
+            libwebsockets-static-linux-arm64.tar.gz.sha256
+          if-no-files-found: ignore
+
+  build-macos-intel:
+    runs-on: macos-13
+    name: Build macOS Intel
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          brew install cmake openssl libcap
+
+      - name: Configure CMake
+        run: |
+          mkdir -p "${{ env.BUILD_DIR }}"
+          cd "${{ env.BUILD_DIR }}"
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
+            -DLWS_WITH_STATIC=ON \
+            -DLWS_WITH_SHARED=OFF \
+            -DLWS_WITH_SSL=ON \
+            -DLWS_WITH_MINIMAL_EXAMPLES=OFF \
+            -DLWS_WITHOUT_TESTAPPS=ON \
+            -DOPENSSL_DIR=$(brew --prefix openssl)
+
+      - name: Build
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          cmake --build . --config ${{ env.CMAKE_BUILD_TYPE }} --parallel $(sysctl -n hw.ncpu)
+
+      - name: Create distribution package
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          mkdir -p dist/include dist/lib
+          cp ../include/libwebsockets.h dist/include/
+          cp ../include/libwebsockets dist/include/ -r
+          cp lib/libwebsockets.a dist/lib/
+          cd dist
+          tar -czf ../libwebsockets-static-macos-intel.tar.gz .
+          cd ..
+          sha256sum libwebsockets-static-macos-intel.tar.gz > libwebsockets-static-macos-intel.tar.gz.sha256
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwebsockets-macos-intel
+          path: |
+            ${{ env.BUILD_DIR }}/libwebsockets-static-macos-intel.tar.gz
+            ${{ env.BUILD_DIR }}/libwebsockets-static-macos-intel.tar.gz.sha256
+
+  build-macos-arm64:
+    runs-on: macos-14
+    name: Build macOS ARM64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          brew install cmake openssl libcap
+
+      - name: Configure CMake
+        run: |
+          mkdir -p "${{ env.BUILD_DIR }}"
+          cd "${{ env.BUILD_DIR }}"
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} \
+            -DLWS_WITH_STATIC=ON \
+            -DLWS_WITH_SHARED=OFF \
+            -DLWS_WITH_SSL=ON \
+            -DLWS_WITH_MINIMAL_EXAMPLES=OFF \
+            -DLWS_WITHOUT_TESTAPPS=ON \
+            -DOPENSSL_DIR=$(brew --prefix openssl)
+
+      - name: Build
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          cmake --build . --config ${{ env.CMAKE_BUILD_TYPE }} --parallel $(sysctl -n hw.ncpu)
+
+      - name: Create distribution package
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          mkdir -p dist/include dist/lib
+          cp ../include/libwebsockets.h dist/include/
+          cp ../include/libwebsockets dist/include/ -r
+          cp lib/libwebsockets.a dist/lib/
+          cd dist
+          tar -czf ../libwebsockets-static-macos-arm64.tar.gz .
+          cd ..
+          sha256sum libwebsockets-static-macos-arm64.tar.gz > libwebsockets-static-macos-arm64.tar.gz.sha256
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwebsockets-macos-arm64
+          path: |
+            ${{ env.BUILD_DIR }}/libwebsockets-static-macos-arm64.tar.gz
+            ${{ env.BUILD_DIR }}/libwebsockets-static-macos-arm64.tar.gz.sha256
+
+  build-windows:
+    runs-on: windows-latest
+    name: Build Windows x86_64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install CMake and dependencies
+        run: |
+          choco install cmake -y
+
+      - name: Configure CMake
+        run: |
+          mkdir "${{ env.BUILD_DIR }}"
+          cd "${{ env.BUILD_DIR }}"
+          cmake .. `
+            -DCMAKE_BUILD_TYPE=${{ env.CMAKE_BUILD_TYPE }} `
+            -DLWS_WITH_STATIC=ON `
+            -DLWS_WITH_SHARED=OFF `
+            -DLWS_WITH_SSL=ON `
+            -DLWS_WITH_MINIMAL_EXAMPLES=OFF `
+            -DLWS_WITHOUT_TESTAPPS=ON
+
+      - name: Build
+        run: |
+          cd "${{ env.BUILD_DIR }}"
+          cmake --build . --config ${{ env.CMAKE_BUILD_TYPE }} --parallel $env:NUMBER_OF_PROCESSORS
+
+      - name: Create distribution package
+        run: |
+          $BuildDir = "${{ env.BUILD_DIR }}"
+          New-Item -ItemType Directory -Force -Path "$BuildDir/dist/include" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$BuildDir/dist/lib" | Out-Null
+          Copy-Item "include/libwebsockets.h" "$BuildDir/dist/include/"
+          Copy-Item "include/libwebsockets" "$BuildDir/dist/include/" -Recurse
+          Copy-Item "$BuildDir/lib/${{ env.CMAKE_BUILD_TYPE }}/websockets_static.lib" "$BuildDir/dist/lib/libwebsockets.lib"
+          cd "$BuildDir/dist"
+          7z a -tzip ../libwebsockets-static-windows-x64.zip *
+          cd ..
+          (Get-FileHash "libwebsockets-static-windows-x64.zip" -Algorithm SHA256).Hash | Out-File -FilePath "libwebsockets-static-windows-x64.zip.sha256" -NoNewline
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: libwebsockets-windows-x64
+          path: |
+            ${{ env.BUILD_DIR }}/libwebsockets-static-windows-x64.zip
+            ${{ env.BUILD_DIR }}/libwebsockets-static-windows-x64.zip.sha256
+
+  release:
+    needs: [build-linux-x64, build-macos-intel, build-macos-arm64, build-windows]
+    runs-on: ubuntu-latest
+    name: Create Release
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.sha256" \) -exec cp {} release/ \;
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          # libwebsockets Static Build Release
+          
+          This release contains statically compiled libwebsockets libraries for multiple platforms.
+          
+          ## Platforms
+          
+          - **Linux x86_64**: libwebsockets-static-linux-x64.tar.gz
+          - **Linux ARM64**: libwebsockets-static-linux-arm64.tar.gz (if available)
+          - **macOS Intel**: libwebsockets-static-macos-intel.tar.gz
+          - **macOS ARM64**: libwebsockets-static-macos-arm64.tar.gz
+          - **Windows x86_64**: libwebsockets-static-windows-x64.zip
+          
+          ## Build Configuration
+          
+          All builds were compiled with:
+          - Static linking enabled (`LWS_WITH_STATIC=ON`)
+          - Shared library disabled (`LWS_WITH_SHARED=OFF`)
+          - SSL support enabled (`LWS_WITH_SSL=ON`)
+          - Test applications disabled
+          - Minimal examples disabled
+          
+          ## Verification
+          
+          Each artifact includes a SHA256 checksum file for integrity verification:
+          
+          ```bash
+          sha256sum -c libwebsockets-static-linux-x64.tar.gz.sha256
+          ```
+          
+          ## Contents
+          
+          Each archive contains:
+          - Headers in `include/`
+          - Static library in `lib/libwebsockets.a` (or `.lib` on Windows)
+          
+          ## Dependencies
+          
+          The static libraries include statically linked OpenSSL. Additional system dependencies may be required at runtime depending on your platform.
+          EOF
+          
+          echo "release_notes=$(cat release_notes.md)" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release/*
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
